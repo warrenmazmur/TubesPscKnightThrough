@@ -11,28 +11,34 @@ import util.Move;
 import utils.AIUtils;
 
 /**
- * A simple example implementation of a standard UCT approach.
+ * Agen cerdas berbasis Monte Carlo Tree search dengan enhancement 
+ * permainan untuk Knightthrough.
  *
- * Only supports deterministic, alternating-move games.
- *
- * @author Dennis Soemers
+ * @author Warren Mazmur
+ * @author Jiang Han
+ * diadaptasi dari https://github.com/Ludeme/LudiiExampleAI/blob/master/src/mcts/ExampleUCT.java
  */
 public class MctsKnightThrough extends AI {
-
-    //-------------------------------------------------------------------------
     /**
-     * Our player index
+     * Indeks pemain untuk agen ini
      */
     protected int player = -1;
-
-    //-------------------------------------------------------------------------
+    
     /**
-     * Constructor
+     * Konstruktor
      */
     public MctsKnightThrough() {
     }
 
-    //-------------------------------------------------------------------------
+    /**
+     * Method untuk memilik move yang akan dijalankan pada state tertentu
+     * @param game Game engine dari Ludii
+     * @param context Konteks yang permainan saat ini (statenya, aturannya, available move, dll)
+     * @param maxSeconds Waktu maksimal yang dianjurkan untuk melakukan komputasi
+     * @param maxIterations Iterasi maksimal yang dianjurkan untuk melakukan komputasi
+     * @param maxDepth Kedalaman pencarian pada tree yang dianjurkan 
+     * @return Object Move yang dipilih oleh agen
+     */
     @Override
     public Move selectAction(
             final Game game,
