@@ -4,10 +4,16 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import game.Game;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import main.collections.FastArrayList;
 import util.AI;
 import util.Context;
 import util.Move;
+import util.state.containerState.ContainerState;
 import utils.AIUtils;
 
 /**
@@ -24,10 +30,14 @@ public class MctsKnightThrough extends AI {
      */
     protected int player = -1;
     
+    protected static Map<Node, Node> visited;
+    
     /**
      * Konstruktor
      */
     public MctsKnightThrough() {
+        visited = new HashMap<>();
+        this.friendlyName = "Ujang";
     }
 
     /**
@@ -47,8 +57,20 @@ public class MctsKnightThrough extends AI {
             final int maxIterations,
             final int maxDepth
     ) {
-        // Start out by creating a new root node (no tree reuse in this example)
-        final Node root = new Node(null, null, context);
+        // Membuat node root
+        Node root = new Node(null, context);
+        // Jika root sudah pernah divisit, 
+        if (visited.containsKey(root)){
+            // kita memakai data dari Node yang sudah pernah divisit tersebut
+            root = visited.get(root);
+        } else {
+            // Jika belum divisit, kita memasukkan node baru ke dalam hashmap.
+            visited.put(root, root);
+        }
+        
+        // menghapus parent dari root supaya tidak bisa kembali ke state
+        // yang sudah tidak bisa divisit
+        root.parent = null;
 
         // We'll respect any limitations on max seconds and max iterations (don't care about max depth)
         final long stopTime = (maxSeconds > 0.0) ? System.currentTimeMillis() + (long) (maxSeconds * 1000L) : Long.MAX_VALUE;
@@ -82,7 +104,7 @@ public class MctsKnightThrough extends AI {
             }
 
             Context contextEnd = current.context;
-
+            //TODO(implement heuristic & evaluation function to replace random playout)
             if (!contextEnd.trial().over()) {
                 // Run a playout if we don't already have a terminal game state in node
                 contextEnd = new Context(contextEnd);
@@ -142,7 +164,16 @@ public class MctsKnightThrough extends AI {
             context.game().apply(context, move);
 
             // create new node and return it
-            return new Node(current, move, context);
+            Node newNode = new Node(current, context);
+            if (visited.containsKey(newNode)){
+                visited.get(newNode).parent = current;
+            } else {
+                visited.put(newNode, newNode);
+            }
+            
+            // catet move dari parent ke children.
+            current.moveToChildren.put(newNode, move);
+            return newNode;
         }
 
         // use UCB1 equation to select from all children, with random tie-breaking
@@ -187,9 +218,9 @@ public class MctsKnightThrough extends AI {
         Node bestChild = null;
         int bestVisitCount = Integer.MIN_VALUE;
         int numBestFound = 0;
-
+        
         final int numChildren = rootNode.children.size();
-
+        
         for (int i = 0; i < numChildren; ++i) {
             final Node child = rootNode.children.get(i);
             final int visitCount = child.visitCount;
@@ -205,7 +236,7 @@ public class MctsKnightThrough extends AI {
             }
         }
 
-        return bestChild.moveFromParent;
+        return rootNode.moveToChildren.get(bestChild);
     }
 
     @Override
@@ -237,12 +268,7 @@ public class MctsKnightThrough extends AI {
         /**
          * Our parent node
          */
-        private final Node parent;
-
-        /**
-         * The move that led from parent to this node
-         */
-        private final Move moveFromParent;
+        private Node parent;
 
         /**
          * This objects contains the game state for this node (this is why we
@@ -256,7 +282,7 @@ public class MctsKnightThrough extends AI {
         private int visitCount = 0;
 
         /**
-         * For every player, sum of utilities / scores backpropagated through
+         * For every player, sum of utilities / scores back propagated through
          * this node
          */
         private final double[] scoreSums;
@@ -265,6 +291,7 @@ public class MctsKnightThrough extends AI {
          * Child nodes
          */
         private final List<Node> children = new ArrayList<Node>();
+        private final Map<Node, Move> moveToChildren = new HashMap<>();
 
         /**
          * List of moves for which we did not yet create a child node
@@ -278,22 +305,36 @@ public class MctsKnightThrough extends AI {
          * @param moveFromParent
          * @param context
          */
-        public Node(final Node parent, final Move moveFromParent, final Context context) {
+        public Node(final Node parent, final Context context) {
             this.parent = parent;
-            this.moveFromParent = moveFromParent;
             this.context = context;
             final Game game = context.game();
             scoreSums = new double[game.players().count() + 1];
 
             // For simplicity, we just take ALL legal moves. 
             // This means we do not support simultaneous-move games.
-            unexpandedMoves = new FastArrayList<Move>(game.moves(context).moves());
+            unexpandedMoves = new FastArrayList<>(game.moves(context).moves());
 
             if (parent != null) {
                 parent.children.add(this);
             }
         }
 
+        @Override
+        public int hashCode() {
+            return context.state().containerStates()[0].cloneWhoCell().hashCode();
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof Node){
+                return context.state().containerStates()[0].cloneWhatCell().toString().equals(((Node)obj).context.state().containerStates()[0].cloneWhatCell().toString());
+            } else {
+                return false;
+            }
+        }
+
+        
     }
 
     //-------------------------------------------------------------------------
