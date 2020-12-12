@@ -8,3 +8,5 @@ nbproject/genfiles.properties
 nbproject/build-impl.xml
 manifest.mf
 build.xml
+/build/
+/dist/
