@@ -24,7 +24,7 @@ import utils.AIUtils;
  * @author Jiang Han
  * diadaptasi dari https://github.com/Ludeme/LudiiExampleAI/blob/master/src/mcts/ExampleUCT.java
  */
-public class MctsKnightThrough extends AI {
+public class MCTSTreeReuse extends AI {
     /**
      * Indeks pemain untuk agen ini
      */
@@ -35,7 +35,7 @@ public class MctsKnightThrough extends AI {
     /**
      * Konstruktor
      */
-    public MctsKnightThrough() {
+    public MCTSTreeReuse() {
         visited = new HashMap<>();
         this.friendlyName = "Ujang";
     }
@@ -202,7 +202,8 @@ public class MctsKnightThrough extends AI {
                 bestChild = child;
             }
         }
-
+            
+        bestChild.parent = current;
         return bestChild;
     }
 

@@ -38,8 +38,8 @@ public class Tester {
         // first, let's instantiate some agents
         final List<AI> agents = new ArrayList<AI>();
         agents.add(null);	// insert null at index 0, because player indices start at 1
-        agents.add(new MctsKnightThrough());
-        agents.add(new MctsKnightThrough());
+        agents.add(new MCTSTreeReuse());
+        agents.add(new MCTSTreeReuse());
         
 
         // number of games we'd like to play
