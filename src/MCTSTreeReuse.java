@@ -31,13 +31,15 @@ public class MCTSTreeReuse extends AI {
     protected int player = -1;
     
     protected static Map<Node, Node> visited;
+    protected static Node chosenChild;
     
     /**
      * Konstruktor
      */
     public MCTSTreeReuse() {
         visited = new HashMap<>();
-        this.friendlyName = "Ujang";
+        this.friendlyName = "Udin";
+        //Agent with better tree reuse
     }
 
     /**
@@ -58,15 +60,8 @@ public class MCTSTreeReuse extends AI {
             final int maxDepth
     ) {
         // Membuat node root
-        Node root = new Node(null, context);
-        // Jika root sudah pernah divisit, 
-        if (visited.containsKey(root)){
-            // kita memakai data dari Node yang sudah pernah divisit tersebut
-            root = visited.get(root);
-        } else {
-            // Jika belum divisit, kita memasukkan node baru ke dalam hashmap.
-            visited.put(root, root);
-        }
+        Node root = new Node(null, null, context);
+        
         
         // menghapus parent dari root supaya tidak bisa kembali ke state
         // yang sudah tidak bisa divisit
@@ -164,15 +159,8 @@ public class MCTSTreeReuse extends AI {
             context.game().apply(context, move);
 
             // create new node and return it
-            Node newNode = new Node(current, context);
-            if (visited.containsKey(newNode)){
-                visited.get(newNode).parent = current;
-            } else {
-                visited.put(newNode, newNode);
-            }
-            
-            // catet move dari parent ke children.
-            current.moveToChildren.put(newNode, move);
+            Node newNode = new Node(current, move, context);
+
             return newNode;
         }
 
@@ -202,8 +190,7 @@ public class MCTSTreeReuse extends AI {
                 bestChild = child;
             }
         }
-            
-        bestChild.parent = current;
+        
         return bestChild;
     }
 
@@ -237,7 +224,7 @@ public class MCTSTreeReuse extends AI {
             }
         }
 
-        return rootNode.moveToChildren.get(bestChild);
+        return bestChild.moveFromParent;
     }
 
     @Override
@@ -292,7 +279,7 @@ public class MCTSTreeReuse extends AI {
          * Child nodes
          */
         private final List<Node> children = new ArrayList<Node>();
-        private final Map<Node, Move> moveToChildren = new HashMap<>();
+        private final Move moveFromParent;
 
         /**
          * List of moves for which we did not yet create a child node
@@ -306,15 +293,16 @@ public class MCTSTreeReuse extends AI {
          * @param moveFromParent
          * @param context
          */
-        public Node(final Node parent, final Context context) {
+        public Node(final Node parent, final Move moveFromParent, final Context context) {
             this.parent = parent;
+            this.moveFromParent = moveFromParent;
             this.context = context;
             final Game game = context.game();
             scoreSums = new double[game.players().count() + 1];
 
             // For simplicity, we just take ALL legal moves. 
             // This means we do not support simultaneous-move games.
-            unexpandedMoves = new FastArrayList<>(game.moves(context).moves());
+            unexpandedMoves = new FastArrayList<Move>(game.moves(context).moves());
 
             if (parent != null) {
                 parent.children.add(this);
