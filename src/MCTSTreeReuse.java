@@ -170,9 +170,9 @@ public class MCTSTreeReuse extends AI {
         }
 
         // Return the move we wish to play
-        Move finalMove = finalMoveSelection(root);
-        sentinel = context;
-        game.apply(sentinel, finalMove);
+        Move finalMove = finalMoveSelection(root, player);
+        game.apply(context, finalMove);
+        sentinel = new Node(root, finalMove, context);
         
         return finalMove;
     }
@@ -440,7 +440,7 @@ public class MCTSTreeReuse extends AI {
      * @param rootNode
      * @return
      */
-    public static Move finalMoveSelection(final Node rootNode) {
+    public static Move finalMoveSelection(final Node rootNode, int playerId) {
         
         if(isFixedNextMove) return fixedNextMove;
         
@@ -465,7 +465,7 @@ public class MCTSTreeReuse extends AI {
             }
         }
 
-        return bestChild;
+        return bestChild.moveFromParent;
     }
 
     @Override
