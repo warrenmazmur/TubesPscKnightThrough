@@ -34,7 +34,8 @@ public class MCTSTreeReuse extends AI {
      * Indeks pemain untuk agen ini
      */
     protected int player = -1;
-    
+    protected static boolean isFixedNextMove = false;
+    protected static Move fixedNextMove = null;
 //    protected static Map<Node, Node> visited;
     
     public static class WeightedMove implements Comparable<WeightedMove>{
@@ -59,7 +60,7 @@ public class MCTSTreeReuse extends AI {
      */
     public MCTSTreeReuse() {
 //        visited = new HashMap<>();
-        this.friendlyName = "Ujang v4";
+        this.friendlyName = "Ujang v.OP";
     }
 
     /**
@@ -79,6 +80,10 @@ public class MCTSTreeReuse extends AI {
             final int maxIterations,
             final int maxDepth
     ) {
+        
+        // initialize fixedNextMove
+        isFixedNextMove = false;
+        
         // Membuat node root
         Node root = new Node(null, context);
         // Jika root sudah pernah divisit, 
@@ -195,6 +200,8 @@ public class MCTSTreeReuse extends AI {
             Move nextMove;
             if(listMove[0].heuristicValue == 1000000) {
                 nextMove = listMove[0].move;
+                isFixedNextMove = true;
+                fixedNextMove = listMove[0].move;
             }else if (listMove[0].heuristicValue != -1000000){
                 FastArrayList<WeightedMove> roulette = new FastArrayList<>();
                 double minValue = listMove[0].heuristicValue;
@@ -254,6 +261,7 @@ public class MCTSTreeReuse extends AI {
         
         final int mover = context.state().mover(); // player yang mendapat giliran saat ini
         
+        boolean fixKalah = false;
         for (int i = 0; i < 64; i++) {
             int player = chunks.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
@@ -264,7 +272,7 @@ public class MCTSTreeReuse extends AI {
                     return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
                 }
                 else if(y >= 5 && mover == 2) {
-                    return -1000000;
+                    fixKalah = true;
                 }
                 
             }
@@ -274,14 +282,14 @@ public class MCTSTreeReuse extends AI {
                     return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
                 }
                 else if(y <= 2 && mover == 1) {
-                    return -1000000;
+                    fixKalah = true;
                 }
             }
             
             state[y][x] = player; // update papan
         }
         
-        
+        if (fixKalah) return -1000000;
         
         if(mover == 1) { // giliran saat ini adalah player 1
             for (int i : pos1) {
@@ -436,6 +444,9 @@ public class MCTSTreeReuse extends AI {
      * @return
      */
     public static Move finalMoveSelection(final Node rootNode) {
+        
+        if(isFixedNextMove) return fixedNextMove;
+        
         Node bestChild = null;
         int bestVisitCount = Integer.MIN_VALUE;
         int numBestFound = 0;
