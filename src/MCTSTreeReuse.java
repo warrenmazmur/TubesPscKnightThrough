@@ -62,11 +62,8 @@ public class MCTSTreeReuse extends AI {
      */
     public MCTSTreeReuse() {
         visited = new HashMap<>();
-        // this.friendlyName = "Udin v5";
         Node sentinel = null;
-        //Agent with better tree reuse
-//        visited = new HashMap<>();
-        this.friendlyName = "Ujang x Udin v.1";
+        this.friendlyName = "Ujang x Udin v.4";
     }
 
     /**
@@ -203,11 +200,13 @@ public class MCTSTreeReuse extends AI {
             Arrays.sort(listMove);
             
             Move nextMove;
-            if(listMove[0].heuristicValue == 1000000) {
+            if(listMove[0].heuristicValue == 1000000 || listMove[0].heuristicValue == 999999) {
                 nextMove = listMove[0].move;
-                isFixedNextMove = true;
-                fixedNextMove = listMove[0].move;
-            }else if (listMove[0].heuristicValue != -1000000){
+//                isFixedNextMove = true;
+//                fixedNextMove = listMove[0].move;
+                break;
+            }
+            else if (listMove[0].heuristicValue != -1000000){
                 FastArrayList<WeightedMove> roulette = new FastArrayList<>();
                 double minValue = listMove[0].heuristicValue;
                 double totalValue = 0;
@@ -254,6 +253,25 @@ public class MCTSTreeReuse extends AI {
     }
     
     public static double heuristicFunction(Context context, Game game, Move move) {
+        final int mover = context.state().mover(); // player yang mendapat giliran saat ini
+        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
+        Set<Integer> criticalCell = new HashSet<>();
+        for (int i = 0; i < 64; i++) {
+            int player = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
+            int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
+            
+            if(mover == 1 ) {
+                if(player == 2 && (y == 5 || y == 6)) {
+                    criticalCell.add(i);
+                }
+            }
+            else {
+                if(player == 1 && (y == 1 || y == 2)) {
+                    criticalCell.add(i);
+                }
+            }
+        }
+        
         Context context2 = new Context(context);
         game.apply(context2, move);
         ChunkSet chunks = context2.state().containerStates()[0].cloneWhoCell();
@@ -264,27 +282,36 @@ public class MCTSTreeReuse extends AI {
         int state[][] = new int[8][8]; // representasi papan dari state saat ini
         double heuristicValue = 0;
         
-        final int mover = context.state().mover(); // player yang mendapat giliran saat ini
         
         boolean fixKalah = false;
         for (int i = 0; i < 64; i++) {
             int player = chunks.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
             
-            if(player == 1) {
+            if(player == 1) { // putih
                 pos1.add(i);
-                if(y == 7){ // posisi goal dari player 1
+                if(y == 7 && mover == 1){ // posisi goal dari player 1
                     return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
+                }
+                else if(mover == 1 && (y == 5 || y == 6)) {
+                    if(criticalCell.contains(i)) {
+                        return 999999;
+                    }
                 }
                 else if(y >= 5 && mover == 2) {
                     fixKalah = true;
                 }
                 
             }
-            else {
+            else { // hitam
                 pos2.add(i);
                 if(y == 0){ // posisi goal dari player 2
                     return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
+                }
+                else if(mover == 2 && (y == 1 || y == 2)) {
+                    if(criticalCell.contains(i)) {
+                        return 999999;
+                    }
                 }
                 else if(y <= 2 && mover == 1) {
                     fixKalah = true;
@@ -442,7 +469,7 @@ public class MCTSTreeReuse extends AI {
      */
     public static Move finalMoveSelection(final Node rootNode, int playerId) {
         
-        if(isFixedNextMove) return fixedNextMove;
+//        if(isFixedNextMove) return fixedNextMove;
         
         Node bestChild = null;
         double bestValue = Integer.MIN_VALUE;
