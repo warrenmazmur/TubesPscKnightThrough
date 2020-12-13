@@ -543,7 +543,7 @@ public class MCTSTreeReuse extends AI {
 
         @Override
         public int hashCode() {
-            return context.state().containerStates()[0].cloneWhoCell().hashCode();
+            return context.state().containerStates()[0].cloneWhoCell().toString().hashCode();
         }
 
         @Override
