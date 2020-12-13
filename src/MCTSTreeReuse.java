@@ -4,43 +4,69 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import game.Game;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
+import main.collections.ChunkSet;
 import main.collections.FastArrayList;
 import util.AI;
 import util.Context;
 import util.Move;
+import util.action.Action;
 import util.state.containerState.ContainerState;
 import utils.AIUtils;
 
 /**
  * Agen cerdas berbasis Monte Carlo Tree search dengan enhancement 
  * permainan untuk Knightthrough.
+ * Diadaptasi dari https://github.com/Ludeme/LudiiExampleAI/blob/master/src/mcts/ExampleUCT.java
  *
  * @author Warren Mazmur
  * @author Jiang Han
- * diadaptasi dari https://github.com/Ludeme/LudiiExampleAI/blob/master/src/mcts/ExampleUCT.java
+ * 
  */
 public class MCTSTreeReuse extends AI {
     /**
      * Indeks pemain untuk agen ini
      */
     protected int player = -1;
+    protected static boolean isFixedNextMove = false;
+    protected static Move fixedNextMove = null;
+//    protected static Map<Node, Node> visited;
     
     protected static Map<String, Node> visited;
     protected static Node sentinel = null;
+    public static class WeightedMove implements Comparable<WeightedMove>{
+        public Move move;
+        public double heuristicValue;
+
+        public WeightedMove(Move move, double heuristicValue) {
+            this.move = move;
+            this.heuristicValue = heuristicValue;
+        }
+
+        @Override
+        public int compareTo(WeightedMove o) {
+            if(this.heuristicValue > o.heuristicValue) return -1;
+            else if(this.heuristicValue == o.heuristicValue) return 0;
+            else return 1;
+        }
+    }
     
     /**
      * Konstruktor
      */
     public MCTSTreeReuse() {
         visited = new HashMap<>();
-        this.friendlyName = "Udin v5";
+        // this.friendlyName = "Udin v5";
         Node sentinel = null;
         //Agent with better tree reuse
+//        visited = new HashMap<>();
+        this.friendlyName = "Ujang x Udin v.1";
     }
 
     /**
@@ -60,6 +86,10 @@ public class MCTSTreeReuse extends AI {
             final int maxIterations,
             final int maxDepth
     ) {
+        
+        // initialize fixedNextMove
+        isFixedNextMove = false;
+        
         // Membuat node root
         Node root = new Node(sentinel, null, context);
         String rHash = root.nodeHash();
@@ -117,6 +147,9 @@ public class MCTSTreeReuse extends AI {
                         0.f,
                         ThreadLocalRandom.current()
                 );
+//                playoutRandom(context,game);
+//                playoutHeuristic(context, game);
+                
             }
 
             // This computes utilities for all players at the of the playout,
@@ -137,10 +170,210 @@ public class MCTSTreeReuse extends AI {
         }
 
         // Return the move we wish to play
-        sentinel = finalNodeSelection(root, player);
+        Move finalMove = finalMoveSelection(root);
+        sentinel = context;
+        game.apply(sentinel, finalMove);
         
-        return sentinel.moveFromParent;
+        return finalMove;
     }
+    
+    /**
+     * 
+     */
+    public static void playoutRandom(Context context, Game game) {
+        while(!context.trial().over()) {
+            final FastArrayList<Move> legalMoves = game.moves(context).moves();
+            Random rand = new Random();
+            Move nextMove = legalMoves.get(rand.nextInt(legalMoves.size()));
+            game.apply(context, nextMove);
+        }
+        
+    }
+    
+    public static void playoutHeuristic(Context context, Game game) {
+        while(!context.trial().over()) {
+            final FastArrayList<Move> legalMoves = game.moves(context).moves();
+            Random rand = ThreadLocalRandom.current();
+            WeightedMove listMove[] = new WeightedMove[legalMoves.size()];
+            for (int i = 0 ; i < legalMoves.size() ; i++) {
+                double heuristicValue = heuristicFunction(context, game, legalMoves.get(i));
+                listMove[i] = new WeightedMove(legalMoves.get(i), heuristicValue);
+            }
+            
+            Arrays.sort(listMove);
+            
+            Move nextMove;
+            if(listMove[0].heuristicValue == 1000000) {
+                nextMove = listMove[0].move;
+                isFixedNextMove = true;
+                fixedNextMove = listMove[0].move;
+            }else if (listMove[0].heuristicValue != -1000000){
+                FastArrayList<WeightedMove> roulette = new FastArrayList<>();
+                double minValue = listMove[0].heuristicValue;
+                double totalValue = 0;
+                for (int i = 0; i < listMove.length; i++) {
+                    if(listMove[i].heuristicValue != -1000000) {
+                        roulette.add(listMove[i]);
+                        minValue = Math.min(minValue, listMove[i].heuristicValue);
+                        totalValue += listMove[i].heuristicValue;
+                    } else {
+                        break;
+                    }
+                }
+                
+                if(minValue < 0) {
+                    for (WeightedMove wm : roulette) {
+                        wm.heuristicValue += Math.abs(minValue);
+                    }
+                    totalValue += roulette.size() * Math.abs(minValue);
+                }
+                
+                double selectedValue = ThreadLocalRandom.current().nextDouble(0, totalValue);
+                
+                double lowerBound = 0;
+                double upperBound = 0;
+                
+                nextMove = roulette.get(0).move; // pasti dioverwrite
+                for (int i = 0; i < roulette.size(); i++) {
+                    upperBound += roulette.get(i).heuristicValue;
+                    if(selectedValue >= lowerBound && selectedValue <= upperBound) {
+                        nextMove = roulette.get(i).move;
+                        break;
+                    }
+                    lowerBound = upperBound;
+                }
+                
+                
+            }else {
+                nextMove = legalMoves.get(rand.nextInt(legalMoves.size()));
+            }
+            
+            game.apply(context, nextMove);
+            
+        }
+    }
+    
+    public static double heuristicFunction(Context context, Game game, Move move) {
+        Context context2 = new Context(context);
+        game.apply(context2, move);
+        ChunkSet chunks = context2.state().containerStates()[0].cloneWhoCell();
+        
+        FastArrayList<Integer> pos1 = new FastArrayList<>(); // ArrayList yang menampung posisi-posisi dari kuda player 1
+        FastArrayList<Integer> pos2 = new FastArrayList<>(); // ArrayList yang menampung posisi-posisi dari kuda player 2
+        
+        int state[][] = new int[8][8]; // representasi papan dari state saat ini
+        double heuristicValue = 0;
+        
+        final int mover = context.state().mover(); // player yang mendapat giliran saat ini
+        
+        boolean fixKalah = false;
+        for (int i = 0; i < 64; i++) {
+            int player = chunks.getChunk(i); // nomor player yang menempati posisi i
+            int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
+            
+            if(player == 1) {
+                pos1.add(i);
+                if(y == 7){ // posisi goal dari player 1
+                    return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
+                }
+                else if(y >= 5 && mover == 2) {
+                    fixKalah = true;
+                }
+                
+            }
+            else {
+                pos2.add(i);
+                if(y == 0){ // posisi goal dari player 2
+                    return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
+                }
+                else if(y <= 2 && mover == 1) {
+                    fixKalah = true;
+                }
+            }
+            
+            state[y][x] = player; // update papan
+        }
+        
+        if (fixKalah) return -1000000;
+        
+        if(mover == 1) { // giliran saat ini adalah player 1
+            for (int i : pos1) {
+                int x = i%8, y = i/8;
+                
+                // hitung total setiap kuda sekutu dijaga oleh berapa kuda sekutu
+                if(x-1 >= 0 && y-2 >= 0 && state[y-2][x-1] == mover) {
+                    heuristicValue++;
+                }
+                if(x-2 >= 0 && y-1 >= 0 && state[y-1][x-2] == mover) {
+                    heuristicValue++;
+                }
+                if(x+1 < 8 && y-2 >= 0 && state[y-2][x+1] == mover) {
+                    heuristicValue++;
+                }
+                if(x+2 < 8 && y-1 >= 0 && state[y-1][x+2] == mover) {
+                    heuristicValue++;
+                }
+                
+                // hitung total setiap kuda sekutu terancam oleh berapa kuda lawan
+                if(x-1 >= 0 && y+2 < 8 && state[y+2][x-1] != mover) {
+                    heuristicValue--;
+                }
+                if(x-2 >= 0 && y+1 < 8 && state[y+1][x-2] != mover) {
+                    heuristicValue--;
+                }
+                if(x+1 < 8 && y+2 < 8 && state[y+2][x+1] != mover) {
+                    heuristicValue--;
+                }
+                if(x+2 < 8 && y+1 < 8 && state[y+1][x+2] != mover) {
+                    heuristicValue--;
+                }
+
+            }
+            
+            for (int i : pos2) {
+                int x = i%8, y = i/8;
+                
+            }
+        }
+        else { // giliran saat ini adalah player 2
+            for (int i : pos2) {
+                int x = i%8, y = i/8;
+                
+                // hitung total setiap kuda sekutu dijaga oleh berapa kuda sekutu
+                if(x-1 >= 0 && y+2 < 8 && state[y+2][x-1] == mover) {
+                    heuristicValue++;
+                }
+                if(x-2 >= 0 && y+1 < 8 && state[y+1][x-2] == mover) {
+                    heuristicValue++;
+                }
+                if(x+1 < 8 && y+2 < 8 && state[y+2][x+1] == mover) {
+                    heuristicValue++;
+                }
+                if(x+2 < 8 && y+1 < 8 && state[y+1][x+2] == mover) {
+                    heuristicValue++;
+                }
+                
+                // hitung total setiap kuda sekutu terancam oleh berapa kuda lawan
+                if(x-1 >= 0 && y-2 >= 0 && state[y-2][x-1] != mover) {
+                    heuristicValue--;
+                }
+                if(x-2 >= 0 && y-1 >= 0 && state[y-1][x-2] != mover) {
+                    heuristicValue--;
+                }
+                if(x+1 < 8 && y-2 >= 0 && state[y-2][x+1] != mover) {
+                    heuristicValue--;
+                }
+                if(x+2 < 8 && y-1 >= 0 && state[y-1][x+2] != mover) {
+                    heuristicValue--;
+                }
+            }
+        }
+        
+        
+
+        return heuristicValue;
+    }
+    
 
     /**
      * Selects child of the given "current" node according to UCB1 equation.
@@ -207,7 +440,10 @@ public class MCTSTreeReuse extends AI {
      * @param rootNode
      * @return
      */
-    public static Node finalNodeSelection(final Node rootNode, int playerId) {
+    public static Move finalMoveSelection(final Node rootNode) {
+        
+        if(isFixedNextMove) return fixedNextMove;
+        
         Node bestChild = null;
         double bestValue = Integer.MIN_VALUE;
         int numBestFound = 0;
