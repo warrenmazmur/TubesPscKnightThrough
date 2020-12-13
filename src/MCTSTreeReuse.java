@@ -30,15 +30,15 @@ public class MCTSTreeReuse extends AI {
      */
     protected int player = -1;
     
-    protected static Map<Node, Node> visited;
-    protected static Node chosenChild;
+    protected static Map<String, Node> visited;
+    protected static Node sentinel = null;
     
     /**
      * Konstruktor
      */
     public MCTSTreeReuse() {
         visited = new HashMap<>();
-        this.friendlyName = "Udin";
+        this.friendlyName = "Udin v4";
         //Agent with better tree reuse
     }
 
@@ -60,12 +60,14 @@ public class MCTSTreeReuse extends AI {
             final int maxDepth
     ) {
         // Membuat node root
-        Node root = new Node(null, null, context);
-        
-        
-        // menghapus parent dari root supaya tidak bisa kembali ke state
-        // yang sudah tidak bisa divisit
-        root.parent = null;
+        Node root = new Node(sentinel, null, context);
+        String rHash = root.nodeHash();
+        if (visited.containsKey(rHash)){
+            root = visited.get(rHash);
+            System.out.println("Gotten");
+        } else {
+            System.out.println("missed");
+        }        
 
         // We'll respect any limitations on max seconds and max iterations (don't care about max depth)
         final long stopTime = (maxSeconds > 0.0) ? System.currentTimeMillis() + (long) (maxSeconds * 1000L) : Long.MAX_VALUE;
@@ -121,7 +123,7 @@ public class MCTSTreeReuse extends AI {
             final double[] utilities = AIUtils.utilities(contextEnd);
 
             // Backpropagate utilities through the tree
-            while (current != null) {
+            while (current != sentinel) {
                 current.visitCount += 1;
                 for (int p = 1; p <= game.players().count(); ++p) {
                     current.scoreSums[p] += utilities[p];
@@ -134,7 +136,9 @@ public class MCTSTreeReuse extends AI {
         }
 
         // Return the move we wish to play
-        return finalMoveSelection(root);
+        sentinel = finalNodeSelection(root, player);
+        
+        return sentinel.moveFromParent;
     }
 
     /**
@@ -195,36 +199,36 @@ public class MCTSTreeReuse extends AI {
     }
 
     /**
-     * Selects the move we wish to play using the "Robust Child" strategy
+     * Selects the move we wish to play using the "Robust Child" strategy __ coba pake max value strategy
      * (meaning that we play the move leading to the child of the root node with
      * the highest visit count).
      *
      * @param rootNode
      * @return
      */
-    public static Move finalMoveSelection(final Node rootNode) {
+    public static Node finalNodeSelection(final Node rootNode, int playerId) {
         Node bestChild = null;
-        int bestVisitCount = Integer.MIN_VALUE;
+        double bestValue = Integer.MIN_VALUE;
         int numBestFound = 0;
         
         final int numChildren = rootNode.children.size();
         
         for (int i = 0; i < numChildren; ++i) {
             final Node child = rootNode.children.get(i);
-            final int visitCount = child.visitCount;
+            final double value = child.scoreSums[playerId];
 
-            if (visitCount > bestVisitCount) {
-                bestVisitCount = visitCount;
+            if (value > bestValue) {
+                bestValue = value;
                 bestChild = child;
                 numBestFound = 1;
-            } else if (visitCount == bestVisitCount
+            } else if (value == bestValue
                     && ThreadLocalRandom.current().nextInt() % ++numBestFound == 0) {
                 // this case implements random tie-breaking
                 bestChild = child;
             }
         }
 
-        return bestChild.moveFromParent;
+        return bestChild;
     }
 
     @Override
@@ -302,26 +306,30 @@ public class MCTSTreeReuse extends AI {
 
             // For simplicity, we just take ALL legal moves. 
             // This means we do not support simultaneous-move games.
-            unexpandedMoves = new FastArrayList<Move>(game.moves(context).moves());
+            unexpandedMoves = new FastArrayList<>(game.moves(context).moves());
 
             if (parent != null) {
                 parent.children.add(this);
             }
         }
-
-        @Override
-        public int hashCode() {
-            return context.state().containerStates()[0].cloneWhoCell().hashCode();
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj instanceof Node){
-                return context.state().containerStates()[0].cloneWhatCell().toString().equals(((Node)obj).context.state().containerStates()[0].cloneWhatCell().toString());
+        
+        public String nodeHash() {
+            if (parent==null){
+                return (context.state().containerStates()[0].cloneWhoCell().toString() + "null");
             } else {
-                return false;
+                return (context.state().containerStates()[0].cloneWhoCell().toString() + parent.context.state().containerStates()[0].cloneWhoCell().toString());
             }
         }
+
+//        @Override
+//        public boolean equals(Object obj) {
+//            if (obj instanceof Node){
+//                Node nObj = (Node) obj;
+//                return this.parent == nObj.parent && context.state().containerStates()[0].cloneWhatCell().toString().equals((nObj).context.state().containerStates()[0].cloneWhatCell().toString());
+//            } else {
+//                return false;
+//            }
+//        }
 
         
     }
