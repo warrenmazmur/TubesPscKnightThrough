@@ -38,7 +38,8 @@ public class MCTSTreeReuse extends AI {
      */
     public MCTSTreeReuse() {
         visited = new HashMap<>();
-        this.friendlyName = "Udin v4";
+        this.friendlyName = "Udin v5";
+        Node sentinel = null;
         //Agent with better tree reuse
     }
 
