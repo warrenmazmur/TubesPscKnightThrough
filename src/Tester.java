@@ -6,7 +6,10 @@ import java.util.List;
 
 import game.Game;
 import game.types.state.GameType;
+import java.util.HashSet;
+import java.util.Set;
 import main.FileHandling;
+import main.collections.ChunkSet;
 import main.collections.FastArrayList;
 import util.AI;
 import util.Context;
@@ -83,6 +86,10 @@ public class Tester {
 
                 // apply the chosen move
                 game.apply(context, move);
+                printBoard(context);
+                System.out.println("");
+                System.out.println("---------------------");
+                System.out.println("");
             }
             
             // let's see who won
@@ -90,6 +97,22 @@ public class Tester {
             for (final ContainerState containerState : context.state().containerStates()) {
                 System.out.println("last state = " + containerState.cloneWhoCell().toChunkString());
             }
+        }
+    }
+    
+    private static void printBoard(Context context){
+        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
+        int states[][] = new int[8][8];
+        for (int i = 0; i < 64; i++) {
+            int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
+            int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
+            states[y][x] = color;
+        }
+        for (int i = 7; i>=0; i--){
+            for (int j = 0; j < 8; j++) {
+                System.out.print(states[i][j] + " ");
+            }
+            System.out.println("");
         }
     }
 

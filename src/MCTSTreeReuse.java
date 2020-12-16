@@ -7,6 +7,7 @@ import game.Game;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Random;
@@ -34,8 +35,7 @@ public class MCTSTreeReuse extends AI {
      * Indeks pemain untuk agen ini
      */
     protected int player = -1;
-    protected static boolean isFixedNextMove = false;
-    protected static Move fixedNextMove = null;
+    
 //    protected static Map<Node, Node> visited;
     
     protected static Map<String, Node> visited;
@@ -63,7 +63,7 @@ public class MCTSTreeReuse extends AI {
     public MCTSTreeReuse() {
         visited = new HashMap<>();
         Node sentinel = null;
-        this.friendlyName = "Ujang x Udin v.4";
+        this.friendlyName = "Ujang x Udin v.7H";
     }
 
     /**
@@ -83,10 +83,7 @@ public class MCTSTreeReuse extends AI {
             final int maxIterations,
             final int maxDepth
     ) {
-        
-        // initialize fixedNextMove
-        isFixedNextMove = false;
-        
+//        game.
         // Membuat node root
         Node root = new Node(sentinel, null, context);
         String rHash = root.nodeHash();
@@ -133,19 +130,19 @@ public class MCTSTreeReuse extends AI {
             if (!contextEnd.trial().over()) {
                 // Run a playout if we don't already have a terminal game state in node
                 contextEnd = new Context(contextEnd);
-                game.playout(
-                        contextEnd,
-                        null,
-                        -1.0,
-                        null,
-                        null,
-                        0,
-                        -1,
-                        0.f,
-                        ThreadLocalRandom.current()
-                );
+//                game.playout(
+//                        contextEnd,
+//                        null,
+//                        -1.0,
+//                        null,
+//                        null,
+//                        0,
+//                        -1,
+//                        0.f,
+//                        ThreadLocalRandom.current()
+//                );
 //                playoutRandom(context,game);
-//                playoutHeuristic(context, game);
+                playoutHeuristic(context, game);
                 
             }
 
@@ -165,9 +162,81 @@ public class MCTSTreeReuse extends AI {
             // Increment iteration count
             ++numIterations;
         }
+        
+        Move finalMove = null;
 
+        //cek fixed move
+        final int mover = context.state().mover(); // player yang mendapat giliran saat ini
+        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
+        Set<Integer> criticalCell = new HashSet();
+        for (int i = 0; i < 64; i++) {
+            int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
+            int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
+            
+            if(mover == 1 ) {
+                if(color == 2 && (y == 1 || y == 2)) {
+                    criticalCell.add(i);
+                }
+            }
+            else {
+                if(color == 1 && (y == 5 || y == 6)) {
+                    criticalCell.add(i);
+                }
+            }
+        }
+        System.out.println("Player " + mover);
+        System.out.println("set size: " + criticalCell.size());
+        for (Integer i : criticalCell){
+            System.out.println("(" + (i/8) + ", " + (i%8) +")");
+        }
+        
+        final FastArrayList<Move> legalMoves = game.moves(context).moves();
+        moveSearch: for (Move move : legalMoves){
+            Context ctxCopy = new Context(context);
+            game.apply(ctxCopy, move);
+//            System.out.println("======================");
+//            printBoard(ctxCopy);
+//            System.out.println("======================");
+            
+            ChunkSet chunksCopy = ctxCopy.state().containerStates()[0].cloneWhoCell();
+            for (int i = 0; i < 64; i++) {
+                int color = chunksCopy.getChunk(i); // nomor player yang menempati posisi i
+                int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
+                if (mover == 1){
+                    //cek menang
+                    if (y==7 && color == 1){
+                        finalMove = move;
+                        break moveSearch;
+                    }
+                    //cek defensive
+//                    System.out.println("y: " + (i/8));
+//                    System.out.println("x: " + (i%8));
+//                    System.out.println("color: " + color);
+                    if (color == 1 && criticalCell.contains(i)){
+                        System.out.println("Johan");
+                        finalMove = move;
+                        continue moveSearch;
+                    }
+                } else { //mover == 2
+                    //cek menang
+                    if (y==0 && color == 2){
+                        finalMove = move;
+                        break moveSearch;
+                    }
+                    if (color == 2 && criticalCell.contains(i)){
+                        finalMove = move;
+                        continue moveSearch;
+                    }
+                }
+            }
+        }
+
+        System.out.println(mover + " final move: " + finalMove);
         // Return the move we wish to play
-        Move finalMove = finalMoveSelection(root, player);
+        if (finalMove == null){
+            finalMove = finalMoveSelection(root, player);
+        }
+        
         game.apply(context, finalMove);
         sentinel = new Node(root, finalMove, context);
         
@@ -257,16 +326,16 @@ public class MCTSTreeReuse extends AI {
         ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
         Set<Integer> criticalCell = new HashSet<>();
         for (int i = 0; i < 64; i++) {
-            int player = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
+            int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
             
             if(mover == 1 ) {
-                if(player == 2 && (y == 5 || y == 6)) {
+                if(color == 2 && (y == 1 || y == 2)) {
                     criticalCell.add(i);
                 }
             }
             else {
-                if(player == 1 && (y == 1 || y == 2)) {
+                if(color == 1 && (y == 5 || y == 6)) {
                     criticalCell.add(i);
                 }
             }
@@ -285,10 +354,10 @@ public class MCTSTreeReuse extends AI {
         
         boolean fixKalah = false;
         for (int i = 0; i < 64; i++) {
-            int player = chunks.getChunk(i); // nomor player yang menempati posisi i
+            int color = chunks.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
             
-            if(player == 1) { // putih
+            if(color == 1) { // putih
                 pos1.add(i);
                 if(y == 7 && mover == 1){ // posisi goal dari player 1
                     return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
@@ -318,7 +387,7 @@ public class MCTSTreeReuse extends AI {
                 }
             }
             
-            state[y][x] = player; // update papan
+            state[y][x] = color; // update papan
         }
         
         if (fixKalah) return -1000000;
@@ -395,12 +464,9 @@ public class MCTSTreeReuse extends AI {
                 }
             }
         }
-        
-        
-
+       
         return heuristicValue;
     }
-    
 
     /**
      * Selects child of the given "current" node according to UCB1 equation.
@@ -599,4 +665,21 @@ public class MCTSTreeReuse extends AI {
     }
 
     //-------------------------------------------------------------------------
+    
+    
+    private static void printBoard(Context context){
+        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
+        int states[][] = new int[8][8];
+        for (int i = 0; i < 64; i++) {
+            int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
+            int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
+            states[y][x] = color;
+        }
+        for (int i = 7; i>=0; i--){
+            for (int j = 0; j < 8; j++) {
+                System.out.print(states[i][j] + " ");
+            }
+            System.out.println("");
+        }
+    }
 }
