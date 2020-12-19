@@ -86,10 +86,11 @@ public class Tester {
 
                 // apply the chosen move
                 game.apply(context, move);
-                printBoard(context);
-                System.out.println("");
-                System.out.println("---------------------");
-                System.out.println("");
+                
+//                printBoard(context);
+//                System.out.println("");
+//                System.out.println("---------------------");
+//                System.out.println("");
             }
             
             // let's see who won
