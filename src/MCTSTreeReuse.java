@@ -142,13 +142,19 @@ public class MCTSTreeReuse extends AI {
 //                        ThreadLocalRandom.current()
 //                );
 //                playoutRandom(context,game);
-                playoutHeuristic(context, game);
+                playoutHeuristic(context, 20);
                 
             }
-
-            // This computes utilities for all players at the of the playout,
-            // which will all be values in [-1.0, 1.0]
-            final double[] utilities = AIUtils.utilities(contextEnd);
+            
+            final double[] utilities;
+            if(!contextEnd.trial().over()) {
+                // pakai evaluation function
+                utilities = evaluationFunction(contextEnd);
+            }else {
+                // This computes utilities for all players at the of the playout,
+                // which will all be values in [-1.0, 1.0]
+                utilities = AIUtils.utilities(contextEnd);
+            }
 
             // Backpropagate utilities through the tree
             while (current != sentinel) {
@@ -243,21 +249,12 @@ public class MCTSTreeReuse extends AI {
         return finalMove;
     }
     
-    /**
-     * 
-     */
-    public static void playoutRandom(Context context, Game game) {
-        while(!context.trial().over()) {
-            final FastArrayList<Move> legalMoves = game.moves(context).moves();
-            Random rand = new Random();
-            Move nextMove = legalMoves.get(rand.nextInt(legalMoves.size()));
-            game.apply(context, nextMove);
-        }
-        
-    }
     
-    public static void playoutHeuristic(Context context, Game game) {
-        while(!context.trial().over()) {
+    public static void playoutHeuristic(Context context, int maxIteration) {
+        Game game = context.game();
+        
+        int iteration = 0 ;
+        while(!context.trial().over() && iteration < maxIteration) {
             final FastArrayList<Move> legalMoves = game.moves(context).moves();
             Random rand = ThreadLocalRandom.current();
             WeightedMove listMove[] = new WeightedMove[legalMoves.size()];
@@ -271,8 +268,6 @@ public class MCTSTreeReuse extends AI {
             Move nextMove;
             if(listMove[0].heuristicValue == 1000000 || listMove[0].heuristicValue == 999999) {
                 nextMove = listMove[0].move;
-//                isFixedNextMove = true;
-//                fixedNextMove = listMove[0].move;
                 break;
             }
             else if (listMove[0].heuristicValue != -1000000){
@@ -466,6 +461,114 @@ public class MCTSTreeReuse extends AI {
         }
        
         return heuristicValue;
+    }
+    
+    public static double[] evaluationFunction(Context context) {
+        ChunkSet chunks = context.state().containerStates()[0].cloneWhoCell();
+        int white = 0; // jumlah kuda player 1
+        int black = 0; // jumlah kuda player 2
+        for (int i = 0; i < 64; i++) { // loop semua cell dalam board
+            if(chunks.getChunk(i) == 1) {
+                white++; // jika kuda berwarna putih, jumlah kuda player 1 ditambah
+            }else {
+                black++; // jika kuda berwarna hitam, jumlah kuda player 2 ditambah
+            }
+        }
+        
+        // Critical cell adalah cell dimana jika ada kuda musuh menempati cell tersebut, maka 1 langkah lagi musuh pasti menang.
+        int guardedCriticalWhite = 0; // jumlah critical cell player 1 yang dijaga. 
+        int guardedCriticalBlack = 0; // jumlah critical cell player 2 yang dijaga. 
+        
+        // hitung guarded critical cell player 1
+        for (int i = 1; i <= 2; i++) { // critical cell berada pada baris 1 dan 2
+            for (int j = 0; j < 8; j++) { // critical cell berada pada kolom 0 sampai 7
+                
+                if(j >= 1 && i >= 2) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i-2)*8 + (j-1); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 1) { // critical cell terjaga
+                        guardedCriticalWhite ++; // counter critical cell player 1 yang terjaga ditambahkan
+                        continue; 
+                    }
+                }
+                
+                if(j <= 6 && i >= 2) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i-2)*8 + (j+1); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 1) { // critical cell terjaga
+                        guardedCriticalWhite ++; // counter critical cell player 1 yang terjaga ditambahkan
+                        continue;
+                    }
+                }
+                
+                if(j >= 2) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i-1)*8 + (j-2); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 1) { // critical cell terjaga
+                        guardedCriticalWhite ++; // counter critical cell player 1 yang terjaga ditambahkan
+                        continue;
+                    }
+                }
+                
+                if(j <= 5) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i-1)*8 + (j+2); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 1) { // critical cell terjaga
+                        guardedCriticalWhite ++; // counter critical cell player 1 yang terjaga ditambahkan
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // hitung guarded critical cell player 2
+        for (int i = 5; i <= 6; i++) { // critical cell berada pada baris 5 dan 6
+            for (int j = 0; j < 8; j++) { // critical cell berada pada kolom 0 sampai 7
+                
+                if(j >= 1 && i <= 5) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i+2)*8 + (j-1); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 2) { // critical cell terjaga
+                        guardedCriticalBlack ++; // counter critical cell player 2 yang terjaga ditambahkan
+                        continue; 
+                    }
+                }
+                
+                if(j <= 6 && i <= 5) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i+2)*8 + (j+1); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 2) { // critical cell terjaga
+                        guardedCriticalBlack ++; // counter critical cell player 2 yang terjaga ditambahkan
+                        continue;
+                    }
+                }
+                
+                if(j >= 2) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i+1)*8 + (j-2); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 2) { // critical cell terjaga
+                        guardedCriticalBlack ++; // counter critical cell player 2 yang terjaga ditambahkan
+                        continue;
+                    }
+                }
+                
+                if(j <= 5) { // cek apakah cell yang mau dicek berada dalam papan
+                    int nomorChunk = (i+1)*8 + (j+2); // nomor chunk pada papan
+                    if(chunks.getChunk(nomorChunk) == 2) { // critical cell terjaga
+                        guardedCriticalBlack ++; // counter critical cell player 2 yang terjaga ditambahkan
+                        continue;
+                    }
+                }
+            }
+        }
+        
+        // perhitungan evaluation value
+        double eval1 = white + guardedCriticalWhite; // evaluation value player 1
+        double eval2 = black + guardedCriticalBlack; // evaluation value player 2
+        
+        if(eval1 > eval2) eval1*=2;
+        else eval2*=2;
+        
+        double totalEval = eval1 + eval2;
+        
+        double evaluation[] = new double[3]; // array hasil evaluation function
+        evaluation[1] = eval1/totalEval;
+        evaluation[2] = eval2/totalEval;
+        
+        return evaluation;
     }
 
     /**
