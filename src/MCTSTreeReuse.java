@@ -91,7 +91,7 @@ public class MCTSTreeReuse extends AI {
     public MCTSTreeReuse() {
         visited = new HashMap<>(); //menggunakan hashmap supaya kompleksitasnya O(1)
         Node sentinel = null; //pending
-        this.friendlyName = "Ujang x Udin v.7i"; //nama yang dapat ditampilkan pada GUI Ludii
+        this.friendlyName = "Ujang x Udin v.8z"; //nama yang dapat ditampilkan pada GUI Ludii
         eksplorasi = Math.sqrt(2);
     }
 
@@ -123,7 +123,7 @@ public class MCTSTreeReuse extends AI {
             System.out.println("Gotten");
         } else {
             System.out.println("missed");
-            visited.put(rHash, root);
+//            visited.put(rHash, root);
         }        
 
         // Menghitung batas waktu untuk berhenti melakukan simulasi
@@ -142,7 +142,7 @@ public class MCTSTreeReuse extends AI {
                 ) {
             // Mulai penelurusan dari node root
             Node current = root;
-
+//            System.out.println(this.player + " Debug: Iteration");
             // menelusuri pohon
             while (true) {
                 if (current.context.trial().over()) {
@@ -687,7 +687,7 @@ public class MCTSTreeReuse extends AI {
             // menginstansiasi node baru dan menghubungkannya ke game tree
             Node newNode = new Node(current, move, context);
             // memasukan node baru ke dalam hashmap
-            visited.put(newNode.nodeHash(), newNode);
+//            visited.put(newNode.nodeHash(), newNode);
             //mengembalikan Node yang baru diinstansiasi
             return newNode;
         }
