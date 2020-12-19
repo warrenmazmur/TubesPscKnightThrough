@@ -35,20 +35,48 @@ public class MCTSTreeReuse extends AI {
      * Indeks pemain untuk agen ini
      */
     protected int player = -1;
-    
-//    protected static Map<Node, Node> visited;
-    
+    /**
+     * flag untuk debugger
+     */
+    public boolean debug = false;
+    /**
+     * HashMap untuk menyimpan node yang sudah pernah diexpand
+     */
     protected static Map<String, Node> visited;
+    /**
+     * pending
+     */
     protected static Node sentinel = null;
+    
+    /**
+     * parameter eksplorasi untuk selection policy dengan UCB1
+     */
+    public static double eksplorasi;
+    
+    /**
+     * class untuk membungkus objek Move dengan nilai heuristiknya.
+     */
     public static class WeightedMove implements Comparable<WeightedMove>{
         public Move move;
         public double heuristicValue;
 
+        /**
+         * Konstruktor
+         * @param move Move yang disimpan
+         * @param heuristicValue nilai heuristik dari move tersebut
+         */
         public WeightedMove(Move move, double heuristicValue) {
             this.move = move;
             this.heuristicValue = heuristicValue;
         }
 
+        /**
+         * Method untuk membandingan nilai WeightedMove supaya bisa diurutkan
+         * @param o Objek WeightedMove yang ingin dibandingkan
+         * @return -1 jika nilai objek ini lebih kecil,
+         *          0 bila sama, 
+         *          1 bisa lebih besar
+         */
         @Override
         public int compareTo(WeightedMove o) {
             if(this.heuristicValue > o.heuristicValue) return -1;
@@ -61,9 +89,10 @@ public class MCTSTreeReuse extends AI {
      * Konstruktor
      */
     public MCTSTreeReuse() {
-        visited = new HashMap<>();
-        Node sentinel = null;
-        this.friendlyName = "Ujang x Udin v.7H";
+        visited = new HashMap<>(); //menggunakan hashmap supaya kompleksitasnya O(1)
+        Node sentinel = null; //pending
+        this.friendlyName = "Ujang x Udin v.7i"; //nama yang dapat ditampilkan pada GUI Ludii
+        eksplorasi = Math.sqrt(2);
     }
 
     /**
@@ -83,53 +112,59 @@ public class MCTSTreeReuse extends AI {
             final int maxIterations,
             final int maxDepth
     ) {
-//        game.
         // Membuat node root
         Node root = new Node(sentinel, null, context);
-        String rHash = root.nodeHash();
+        String rHash = root.nodeHash(); //menghitung nilai hash dari node root
+        
+        System.out.println("Visited size: " + visited.size());
+        //Mereuse node jika node root pernah diexpand
         if (visited.containsKey(rHash)){
             root = visited.get(rHash);
             System.out.println("Gotten");
         } else {
             System.out.println("missed");
+            visited.put(rHash, root);
         }        
 
-        // We'll respect any limitations on max seconds and max iterations (don't care about max depth)
+        // Menghitung batas waktu untuk berhenti melakukan simulasi
         final long stopTime = (maxSeconds > 0.0) ? System.currentTimeMillis() + (long) (maxSeconds * 1000L) : Long.MAX_VALUE;
+        // Menghitung batas iterasi untuk berhenti melakukan simulasi
         final int maxIts = (maxIterations >= 0) ? maxIterations : Integer.MAX_VALUE;
-
+        //variabel untuk menghitung jumlah iterasi yyang sudah dilakukan
         int numIterations = 0;
 
-        // Our main loop through MCTS iterations
+        // Simulasi MCTS
         while (numIterations < maxIts
-                && // Respect iteration limit
+                && // pengecekan batas iterasi
                 System.currentTimeMillis() < stopTime
-                && // Respect time limit
-                !wantsInterrupt // Respect GUI user clicking the pause button
+                && // pengecekan batas waktu
+                !wantsInterrupt // memeriksa apakah user ingin mem-pause jalannya permainan
                 ) {
-            // Start in root node
+            // Mulai penelurusan dari node root
             Node current = root;
 
-            // Traverse tree
+            // menelusuri pohon
             while (true) {
                 if (current.context.trial().over()) {
-                    // We've reached a terminal state
+                    // berhenti karena telah mencapai terminal state
                     break;
                 }
 
+                //memilih node berikutnya berdasarkan selection policy
                 current = select(current);
 
                 if (current.visitCount == 0) {
-                    // We've expanded a new node, time for playout!
+                    // Kita sudah menemukan node baru, perlu dilakukan play-out
                     break;
                 }
             }
-
-            Context contextEnd = current.context;
-            //TODO(implement heuristic & evaluation function to replace random playout)
+            
+            Context contextEnd = current.context; //mengambil context dari Node akhir
+            //Melakukan playout bisa belum mencapai terminal state
             if (!contextEnd.trial().over()) {
-                // Run a playout if we don't already have a terminal game state in node
+                // mengcopy context supaya context asli tidak berubah
                 contextEnd = new Context(contextEnd);
+                //Bekas play-out random dari contoh
 //                game.playout(
 //                        contextEnd,
 //                        null,
@@ -141,140 +176,178 @@ public class MCTSTreeReuse extends AI {
 //                        0.f,
 //                        ThreadLocalRandom.current()
 //                );
-//                playoutRandom(context,game);
+                //melakukan playout dengan heuristik dan evaluation function
                 playoutHeuristic(context, 20);
-                
             }
-            
+            //array untuk menyimpan nilai utility bagi setiap player dari hasil play-out
             final double[] utilities;
             if(!contextEnd.trial().over()) {
-                // pakai evaluation function
+                // pakai evaluation function sebab simuulasi dipotong
                 utilities = evaluationFunction(contextEnd);
             }else {
-                // This computes utilities for all players at the of the playout,
-                // which will all be values in [-1.0, 1.0]
+                // bila sudah mencapai terminal state, menghitung utility pemain dengan method bawaan Ludii
                 utilities = AIUtils.utilities(contextEnd);
             }
 
-            // Backpropagate utilities through the tree
+            // mencatat nilai utility dari Node leaf sampe ke root (backpropagate)
             while (current != sentinel) {
-                current.visitCount += 1;
+                current.visitCount += 1; //menambah jumlah kunjungan pada node
+                //menambah nilai utility untuk setiap pemain
                 for (int p = 1; p <= game.players().count(); ++p) {
                     current.scoreSums[p] += utilities[p];
                 }
-                current = current.parent;
+                current = current.parent; //memindahkan node ke parentnya
             }
 
-            // Increment iteration count
+            // Menambah jumlah iterarsi saat ini
             ++numIterations;
         }
         
-        Move finalMove = null;
+        Move finalMove = null; //variable untuk menyimpan move yang akan dipilih saat ini
 
-        //cek fixed move
-        final int mover = context.state().mover(); // player yang mendapat giliran saat ini
-        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
+        // memeriksa bila ada move yang mutlak harus diambil
+        // mengambil nomor player yang mendapat giliran saat ini
+        final int mover = context.state().mover(); 
+        // state papan sebelum diapply move
+        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); 
+        // set untuk menyimpan cell-cell yang "kritis"
         Set<Integer> criticalCell = new HashSet();
+        // memeriksa setiap cell
         for (int i = 0; i < 64; i++) {
             int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
             
-            if(mover == 1 ) {
+            if(mover == 1 ) {//jika saat ini giliran player putih
                 if(color == 2 && (y == 1 || y == 2)) {
+                    //Tambahkan cell kritis karena ada kuda musuh yang bisa menang
+                    //dalam 1 langkah
                     criticalCell.add(i);
                 }
             }
-            else {
+            else { //jika saat ini giliran player hitam
                 if(color == 1 && (y == 5 || y == 6)) {
+                    //Tambahkan cell kritis karena ada kuda musuh yang bisa menang
+                    //dalam 1 langkah
                     criticalCell.add(i);
                 }
             }
-        }
-        System.out.println("Player " + mover);
-        System.out.println("set size: " + criticalCell.size());
-        for (Integer i : criticalCell){
-            System.out.println("(" + (i/8) + ", " + (i%8) +")");
         }
         
+        if (debug){ //debugger
+            System.out.println("Player " + mover);
+            System.out.println("set size: " + criticalCell.size());
+            for (Integer i : criticalCell){
+                System.out.println("(" + (i/8) + ", " + (i%8) +")");
+            }
+        }
+        
+        //mengambil list semua Move yang bisa dilakukan
         final FastArrayList<Move> legalMoves = game.moves(context).moves();
-        moveSearch: for (Move move : legalMoves){
-            Context ctxCopy = new Context(context);
-            game.apply(ctxCopy, move);
-//            System.out.println("======================");
-//            printBoard(ctxCopy);
-//            System.out.println("======================");
-            
+        moveSearch: for (Move move : legalMoves){ //untuk setiap move
+            Context ctxCopy = new Context(context); //copy contextnya
+            game.apply(ctxCopy, move); //apply move supaya kita mendapat context berikutnya
+            if (debug){  //debugger
+                System.out.println("======================");
+                printBoard(ctxCopy);
+                System.out.println("======================");
+            }
+            //mengambil game state berikutnya
             ChunkSet chunksCopy = ctxCopy.state().containerStates()[0].cloneWhoCell();
-            for (int i = 0; i < 64; i++) {
+            for (int i = 0; i < 64; i++) { //untuk setiap cell pada papan
                 int color = chunksCopy.getChunk(i); // nomor player yang menempati posisi i
                 int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
-                if (mover == 1){
-                    //cek menang
+                if (mover == 1){//jika saat ini giliran player putih
+                    //cek apakah kita (player putih) bisa menang dalam 1 move
                     if (y==7 && color == 1){
+                        //jika bisa, move ini mutlak harus diambil
                         finalMove = move;
-                        break moveSearch;
+                        break moveSearch; //berhenti mengecek
                     }
-                    //cek defensive
-//                    System.out.println("y: " + (i/8));
-//                    System.out.println("x: " + (i%8));
-//                    System.out.println("color: " + color);
+                    //cek apakah musuh (player hitam) bisa menang dalam 1 move
+                    if (debug){ //debugger
+                        System.out.println("y: " + (i/8));
+                        System.out.println("x: " + (i%8));
+                        System.out.println("color: " + color);
+                    }
+                    //Apakah move ini memakan kuda musuh yang ada pada cell kritis?
                     if (color == 1 && criticalCell.contains(i)){
-                        System.out.println("Johan");
+                        //jika ya, move mutlak diambil. Jika tidak, kita akan kalah
                         finalMove = move;
+                        //teruskan pengecekan, siapa tau ada move yang bisa membuat kita menang
                         continue moveSearch;
                     }
-                } else { //mover == 2
-                    //cek menang
+                } else { //jika saat ini giliran player hitam
+                    //cek apakah kita (player hitam) bisa menang dalam 1 move
                     if (y==0 && color == 2){
+                        //jika bisa, move ini mutlak harus diambil
                         finalMove = move;
-                        break moveSearch;
+                        break moveSearch; //hentikan pengecekan
                     }
+                    //cek apakah musuh (player putih) bisa menang dalam 1 move
                     if (color == 2 && criticalCell.contains(i)){
+                        //jika ya, move mutlak diambil. Jika tidak, kita akan kalah
                         finalMove = move;
+                        //teruskan pengecekan, siapa tau ada move yang bisa membuat kita menang
                         continue moveSearch;
                     }
                 }
             }
         }
-
-        System.out.println(mover + " final move: " + finalMove);
-        // Return the move we wish to play
+        if (debug){ //debugger
+            System.out.println(mover + " final move: " + finalMove);
+        }
+        // memilih final move berdasarkan child selection policy jika tidak ada move yang mutlak harus diambil
         if (finalMove == null){
             finalMove = finalMoveSelection(root, player);
         }
         
+        //pending
         game.apply(context, finalMove);
         sentinel = new Node(root, finalMove, context);
         
         return finalMove;
     }
     
-    
+    /**
+     * Method untuk melakukan play-out dengan heuristik dan evaluation function
+     * @param context Konteks (state) permainan saat ini
+     * @param maxIteration batasan kedalaman/iterasi play-out
+     */
     public static void playoutHeuristic(Context context, int maxIteration) {
-        Game game = context.game();
+        Game game = context.game(); //mengambil objek Game dari Context
         
-        int iteration = 0 ;
+        int iteration = 0; //jumlah iterasi atau kedalaman playout
+        //Melakukan playout selama belum mencapai terminal state dan jumlah iterasi masih mencukupi
         while(!context.trial().over() && iteration < maxIteration) {
+            //mengambil list semua Move yang bisa dilakukan
             final FastArrayList<Move> legalMoves = game.moves(context).moves();
             Random rand = ThreadLocalRandom.current();
+            //membuat list untuk menyimpan move dengan nilai heuristiknya
             WeightedMove listMove[] = new WeightedMove[legalMoves.size()];
+            //menghitung nilai heuristik untuk semua move dan menyimpannya
             for (int i = 0 ; i < legalMoves.size() ; i++) {
-                double heuristicValue = heuristicFunction(context, game, legalMoves.get(i));
+                double heuristicValue = heuristicFunction(context, legalMoves.get(i));
                 listMove[i] = new WeightedMove(legalMoves.get(i), heuristicValue);
             }
-            
+            //mengurutkan move berdasarkan nilai heuristik dari besar ke kecil
             Arrays.sort(listMove);
             
             Move nextMove;
+            //memeriksa apakah player pasti menang (1000000 artinya sudah menang, 999999 artinya berhasil mencegah musuh untuk menang)
             if(listMove[0].heuristicValue == 1000000 || listMove[0].heuristicValue == 999999) {
                 nextMove = listMove[0].move;
                 break;
             }
+            //tidak ada move yang mutlak harus dilakukan
             else if (listMove[0].heuristicValue != -1000000){
+                //memilih move random dengan teknik roullete
+                //move dengan nilai heuristik lebih tinggi memiliki peluaang lebih tinggi daripada move dengan heuristik rendah.
+
                 FastArrayList<WeightedMove> roulette = new FastArrayList<>();
-                double minValue = listMove[0].heuristicValue;
-                double totalValue = 0;
+                double minValue = listMove[0].heuristicValue; //nilai heuristik terkecil
+                double totalValue = 0; //total nilai heuristik
                 for (int i = 0; i < listMove.length; i++) {
+                    //hanya mengambil move yang tidak akan menyebabkan kekalahan
                     if(listMove[i].heuristicValue != -1000000) {
                         roulette.add(listMove[i]);
                         minValue = Math.min(minValue, listMove[i].heuristicValue);
@@ -284,6 +357,7 @@ public class MCTSTreeReuse extends AI {
                     }
                 }
                 
+                //normalimasi nilai heuristik jika ada yang negatif
                 if(minValue < 0) {
                     for (WeightedMove wm : roulette) {
                         wm.heuristicValue += Math.abs(minValue);
@@ -291,12 +365,12 @@ public class MCTSTreeReuse extends AI {
                     totalValue += roulette.size() * Math.abs(minValue);
                 }
                 
+                //memilih nilai random untuk roulette
                 double selectedValue = ThreadLocalRandom.current().nextDouble(0, totalValue);
-                
                 double lowerBound = 0;
                 double upperBound = 0;
-                
                 nextMove = roulette.get(0).move; // pasti dioverwrite
+                //mencari nilai move yang terpilih oleh roulette
                 for (int i = 0; i < roulette.size(); i++) {
                     upperBound += roulette.get(i).heuristicValue;
                     if(selectedValue >= lowerBound && selectedValue <= upperBound) {
@@ -305,79 +379,96 @@ public class MCTSTreeReuse extends AI {
                     }
                     lowerBound = upperBound;
                 }
-                
-                
-            }else {
+            }else { 
+                //pemain saat ini sudah pasti akan kalah
+                //memilih move random karena sudah pasti akan kalah
                 nextMove = legalMoves.get(rand.nextInt(legalMoves.size()));
             }
             
-            game.apply(context, nextMove);
-            
+            game.apply(context, nextMove); //mengapply move yang sudah dipilih
         }
     }
     
-    public static double heuristicFunction(Context context, Game game, Move move) {
+    /**
+     * fungsi heuristik untuk menilai state yang akan dituju dari move tertentu
+     * @param context Konteks (state) permainan saat ini
+     * @param game Objek permainan Knightthrough
+     * @param move Move yang akan menghasilkan state yang akan dinilai
+     * @return nilai heuristik dari state
+     */
+    public static double heuristicFunction(Context context, Move move) {
+        Game game = context.game(); //mengambil objek Game dari Context
         final int mover = context.state().mover(); // player yang mendapat giliran saat ini
-        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
+        // state papan sebelum diapply move
+        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell();
+        // set untuk menyimpan cell-cell yang "kritis"
         Set<Integer> criticalCell = new HashSet<>();
+        
+        //memeriksa setiap cell
         for (int i = 0; i < 64; i++) {
             int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
             
-            if(mover == 1 ) {
+            if(mover == 1 ) { //saat ini giliran player 1 (putih)
                 if(color == 2 && (y == 1 || y == 2)) {
+                    //ada kuda musuh (hitam) yang bisa menang dalam 1 langkah
                     criticalCell.add(i);
                 }
             }
-            else {
+            else { //saat ini giliran player 2 (hitam)
                 if(color == 1 && (y == 5 || y == 6)) {
+                    //ada kuda musuh (putih) yang bisa menang dalam 1 langkah
                     criticalCell.add(i);
                 }
             }
         }
         
+        //mengcopy context supaya context asli tidak berubah
         Context context2 = new Context(context);
         game.apply(context2, move);
+        //Menyimpan state dari context yang sudah dipindahkan
         ChunkSet chunks = context2.state().containerStates()[0].cloneWhoCell();
         
         FastArrayList<Integer> pos1 = new FastArrayList<>(); // ArrayList yang menampung posisi-posisi dari kuda player 1
         FastArrayList<Integer> pos2 = new FastArrayList<>(); // ArrayList yang menampung posisi-posisi dari kuda player 2
         
         int state[][] = new int[8][8]; // representasi papan dari state saat ini
-        double heuristicValue = 0;
+        double heuristicValue = 0; //variabel yang menyimpan nilai heuristik dari state
         
-        
+        //flag yang menandai apakah player saat ini sudah pasti akan kalah
         boolean fixKalah = false;
+        //memeriksa setiap cell
         for (int i = 0; i < 64; i++) {
             int color = chunks.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
             
-            if(color == 1) { // putih
-                pos1.add(i);
-                if(y == 7 && mover == 1){ // posisi goal dari player 1
+            if(color == 1) { // cell ini berisi kuda putih
+                pos1.add(i); // menambah cell ke ArrayList
+                if(y == 7 && mover == 1){ // kuda player putih sudah sampai ke goal
                     return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
                 }
-                else if(mover == 1 && (y == 5 || y == 6)) {
+                else if(mover == 1 && (y == 1 || y == 2)) {
                     if(criticalCell.contains(i)) {
+                        //player 1 berhasil memakan kuda lawan yang akan menang dalam 1 langkah lagi
                         return 999999;
                     }
                 }
-                else if(y >= 5 && mover == 2) {
+                else if(y >= 5 && mover == 2) { //player tidak bisa memakan musuh yang akan sampai ke goal
                     fixKalah = true;
                 }
-                
             }
-            else { // hitam
+            else { // cell ini berisi kuda hitam
                 pos2.add(i);
-                if(y == 0){ // posisi goal dari player 2
+                if(y == 0){ // kuda player hitam sudah sampai ke goal
                     return 1000000; // heuristic value diset Infinity agar move ini pasti terpilih
                 }
-                else if(mover == 2 && (y == 1 || y == 2)) {
+                else if(mover == 2 && (y == 5 || y == 6)) {
                     if(criticalCell.contains(i)) {
+                        //player 2 berhasil memakan kuda lawan yang akan menang dalam 1 langkah lagi
                         return 999999;
                     }
                 }
-                else if(y <= 2 && mover == 1) {
+                else if(y <= 2 && mover == 1) { //player tidak bisa memakan musuh yang akan sampai ke goal
                     fixKalah = true;
                 }
             }
@@ -388,10 +479,11 @@ public class MCTSTreeReuse extends AI {
         if (fixKalah) return -1000000;
         
         if(mover == 1) { // giliran saat ini adalah player 1
+            //untuk setiap kuda berwarna putih
             for (int i : pos1) {
-                int x = i%8, y = i/8;
+                int x = i%8, y = i/8; //ambil posisi kolom dan barisnya
                 
-                // hitung total setiap kuda sekutu dijaga oleh berapa kuda sekutu
+                // menambah heuristik dengan jumlah kuda sekutu yang menjaga kuda saat ini
                 if(x-1 >= 0 && y-2 >= 0 && state[y-2][x-1] == mover) {
                     heuristicValue++;
                 }
@@ -405,7 +497,7 @@ public class MCTSTreeReuse extends AI {
                     heuristicValue++;
                 }
                 
-                // hitung total setiap kuda sekutu terancam oleh berapa kuda lawan
+                // mengurangi heuristik dengan jumlah kuda lawan yang mengancam kuda saat ini
                 if(x-1 >= 0 && y+2 < 8 && state[y+2][x-1] != mover) {
                     heuristicValue--;
                 }
@@ -418,19 +510,14 @@ public class MCTSTreeReuse extends AI {
                 if(x+2 < 8 && y+1 < 8 && state[y+1][x+2] != mover) {
                     heuristicValue--;
                 }
-
-            }
-            
-            for (int i : pos2) {
-                int x = i%8, y = i/8;
-                
             }
         }
         else { // giliran saat ini adalah player 2
+            //untuk setiap kuda berwarna hitam
             for (int i : pos2) {
-                int x = i%8, y = i/8;
+                int x = i%8, y = i/8; //ambil posisi kolom dan barisnya
                 
-                // hitung total setiap kuda sekutu dijaga oleh berapa kuda sekutu
+                // menambah heuristik dengan jumlah kuda sekutu yang menjaga kuda saat ini
                 if(x-1 >= 0 && y+2 < 8 && state[y+2][x-1] == mover) {
                     heuristicValue++;
                 }
@@ -444,7 +531,7 @@ public class MCTSTreeReuse extends AI {
                     heuristicValue++;
                 }
                 
-                // hitung total setiap kuda sekutu terancam oleh berapa kuda lawan
+                // mengurangi heuristik dengan jumlah kuda lawan yang mengancam kuda saat ini
                 if(x-1 >= 0 && y-2 >= 0 && state[y-2][x-1] != mover) {
                     heuristicValue--;
                 }
@@ -463,7 +550,14 @@ public class MCTSTreeReuse extends AI {
         return heuristicValue;
     }
     
+    /**
+     * method untuk mengevaluasi utility dari sebuah state.
+     * Nilai yang dipertimbangkan adalah jumlah kuda dan formasi kuda
+     * @param context Konteks (state) permainan saat ini
+     * @return array double berisi nilai utility untuk setiap player
+     */
     public static double[] evaluationFunction(Context context) {
+        //mengambil board state dari context
         ChunkSet chunks = context.state().containerStates()[0].cloneWhoCell();
         int white = 0; // jumlah kuda player 1
         int black = 0; // jumlah kuda player 2
@@ -559,68 +653,70 @@ public class MCTSTreeReuse extends AI {
         double eval1 = white + guardedCriticalWhite; // evaluation value player 1
         double eval2 = black + guardedCriticalBlack; // evaluation value player 2
         
+        //menambah bobot eval yang bernilai lebih tinggi supaya pengaruhnya lebih besar
         if(eval1 > eval2) eval1*=2;
         else eval2*=2;
         
         double totalEval = eval1 + eval2;
         
         double evaluation[] = new double[3]; // array hasil evaluation function
-        evaluation[1] = eval1/totalEval;
-        evaluation[2] = eval2/totalEval;
+        evaluation[1] = eval1/totalEval; //normalisasi nilai eval
+        evaluation[2] = eval2/totalEval; //normalisasi nilai eval
         
         return evaluation;
     }
 
     /**
-     * Selects child of the given "current" node according to UCB1 equation.
-     * This method also implements the "Expansion" phase of MCTS, and creates a
-     * new node if the given current node has unexpanded moves.
-     *
-     * @param current
-     * @return Selected node (if it has 0 visits, it will be a newly-expanded
-     * node).
+     * Melakukan seleksi dengan rumus UCB1 sekaligus melakukan ekspansi pohon
+     * @param current Node saat ini
+     * @return Node yang terpilih. Bila nilai visitnya == 0, artinya node tersebut baru saja diinstansiasi
      */
     public static Node select(final Node current) {
+        //jika node saat ini belum sepenuhnya diekspansi
         if (!current.unexpandedMoves.isEmpty()) {
-            // randomly select an unexpanded move
+            //memilih salah satu Move secara acak
             final Move move = current.unexpandedMoves.remove(
                     ThreadLocalRandom.current().nextInt(current.unexpandedMoves.size()));
 
-            // create a copy of context
+            // membuat copy dari context saat ini
             final Context context = new Context(current.context);
 
-            // apply the move
+            // meng-apply move supaya kita mendapatkan konteks tetangganya
             context.game().apply(context, move);
 
-            // create new node and return it
+            // menginstansiasi node baru dan menghubungkannya ke game tree
             Node newNode = new Node(current, move, context);
-
+            // memasukan node baru ke dalam hashmap
+            visited.put(newNode.nodeHash(), newNode);
+            //mengembalikan Node yang baru diinstansiasi
             return newNode;
         }
 
-        // use UCB1 equation to select from all children, with random tie-breaking
-        Node bestChild = null;
-        double bestValue = Double.NEGATIVE_INFINITY;
-        final double twoParentLog = 2.0 * Math.log(Math.max(1, current.visitCount));
-        int numBestFound = 0;
+        // menggunakan UCB1 untuk memilih node child. Bila ada yang seri, pilih anak secara random
+        Node bestChild = null; //node anak yang terbaik
+        double bestValue = Double.NEGATIVE_INFINITY; //nilau UCB1 yang tertinggi
+        //menghitung porsi UCB1 yang kosntan
+        final double twoParentLog = Math.pow(eksplorasi, 2) * Math.log(Math.max(1, current.visitCount));
+        int numBestFound = 0; //jumlah node terbaik yang ditemukan
 
-        final int numChildren = current.children.size();
-        final int mover = current.context.state().mover();
+        final int numChildren = current.children.size(); //jumlah node anak dari node saat ini
+        final int mover = current.context.state().mover(); //pemain yang sedang mendapat giliran
 
-        for (int i = 0; i < numChildren; ++i) {
+        for (int i = 0; i < numChildren; ++i) { //untuk setiap node anak
             final Node child = current.children.get(i);
-            final double exploit = child.scoreSums[mover] / child.visitCount;
-            final double explore = Math.sqrt(twoParentLog / child.visitCount);
+            final double exploit = child.scoreSums[mover] / child.visitCount; //hitung nilai eksploitasi
+            final double explore = Math.sqrt(twoParentLog / child.visitCount); //hitung nilai eksploitasi
 
-            final double ucb1Value = exploit + explore;
+            final double ucb1Value = exploit + explore; //menghitung nilai UCB1
 
-            if (ucb1Value > bestValue) {
+            if (ucb1Value > bestValue) { //kita menemukan node dengan nilai tertinggi
+                //menyimpan nilai, dan node anaknya
                 bestValue = ucb1Value;
                 bestChild = child;
                 numBestFound = 1;
             } else if (ucb1Value == bestValue
                     && ThreadLocalRandom.current().nextInt() % ++numBestFound == 0) {
-                // this case implements random tie-breaking
+                // ada node yang memiliki nilai UCB1 yang sama, mengambil salah satu node secara acak
                 bestChild = child;
             }
         }
@@ -629,46 +725,54 @@ public class MCTSTreeReuse extends AI {
     }
 
     /**
-     * Selects the move we wish to play using the "Robust Child" strategy __ coba pake max value strategy
-     * (meaning that we play the move leading to the child of the root node with
-     * the highest visit count).
-     *
-     * @param rootNode
+     * Memilih Move yang akan dijalankan sesuai dengan Child Selection Policy
+     * Child Selection Policy yang digunakan adalah "Max Child", yaitu memilih
+     * child node dengan nilai tertinggi
+     * @param rootNode root node untuk state game saat ini
+     * @param playerId id dari player yang sedang mendapat giliran
      * @return
      */
     public static Move finalMoveSelection(final Node rootNode, int playerId) {
+        Node bestChild = null; //variabel untuk menyimpan Node terbaik
+        double bestValue = Integer.MIN_VALUE; //variabel untuk menyimpan nilai Node tertinggi
+        int numBestFound = 0; //variabel untuk menyimpan jumlah Node yang sama-sama memiliki 
         
-//        if(isFixedNextMove) return fixedNextMove;
+        final int numChildren = rootNode.children.size(); //jumlah node tetangga/anak dari node root
         
-        Node bestChild = null;
-        double bestValue = Integer.MIN_VALUE;
-        int numBestFound = 0;
-        
-        final int numChildren = rootNode.children.size();
-        
-        for (int i = 0; i < numChildren; ++i) {
+        for (int i = 0; i < numChildren; ++i) { //untuk setiap node anak
             final Node child = rootNode.children.get(i);
-            final double value = child.scoreSums[playerId];
+            final double value = child.scoreSums[playerId]; //ambil nilai dari node anak
 
-            if (value > bestValue) {
+            if (value > bestValue) { //kita menemukan node dengan nilai tertinggi
+                //menyimpan nilai dan node yang terbaik
                 bestValue = value;
                 bestChild = child;
                 numBestFound = 1;
             } else if (value == bestValue
                     && ThreadLocalRandom.current().nextInt() % ++numBestFound == 0) {
-                // this case implements random tie-breaking
+                // ada node yang memiliki nilai yang sama, mengambil salah satu node secara acak
                 bestChild = child;
             }
         }
 
-        return bestChild.moveFromParent;
+        return bestChild.moveFromParent; //menyembalikan move yang menyebabkan perpindahan ke state tersebut
     }
 
+    /**
+     * method library untuk menginisialisasi agen. Pada agen ini, nilai yang diinisialisasi hanya id pemainnya
+     * @param game Objek game
+     * @param playerID id pemain untuk agen ini
+     */
     @Override
     public void initAI(final Game game, final int playerID) {
         this.player = playerID;
     }
 
+    /**
+     * Method yang memeriksa apakah agen dapat memainkan game yagn diberikan
+     * @param game Objek Game
+     * @return true bila agen bisa memanikan game, false bila tidak
+     */
     @Override
     public boolean supportsGame(final Game game) {
         if (game.isStochasticGame()) {
@@ -684,47 +788,49 @@ public class MCTSTreeReuse extends AI {
 
     //-------------------------------------------------------------------------
     /**
-     * Inner class for nodes used by example UCT
-     *
-     * @author Dennis Soemers
+     * Inner class untuk node yang akan digunakan dalam algoritma MCTS
+     * @author Dennis Soemers https://github.com/Ludeme/LudiiExampleAI/blob/master/src/mcts/ExampleUCT.java
+     * Diadaptasi oleh Jiang Han dan Warren Mazmur
      */
     private static class Node {
 
         /**
-         * Our parent node
+         * Node parent dari node ini
          */
         private Node parent;
 
         /**
-         * This objects contains the game state for this node (this is why we
-         * don't support stochastic games)
+         * Konteks (state) yang direpresentasikan oleh node ini
          */
         private final Context context;
 
         /**
-         * Visit count for this node
+         * Jumlah frekuensi kunjungan ke node ini
          */
         private int visitCount = 0;
 
         /**
-         * For every player, sum of utilities / scores back propagated through
-         * this node
+         * Nilai utility pagi setiap pemain pada node ini
          */
         private final double[] scoreSums;
 
         /**
-         * Child nodes
+         * List node anak dari node ini
          */
         private final List<Node> children = new ArrayList<Node>();
+        
+        /**
+         * Objek Mode yang menyebabkan perpindahan state dari parent state ke state ini
+         */
         private final Move moveFromParent;
 
         /**
-         * List of moves for which we did not yet create a child node
+         * List dari move-move menuju node yang belum pernah di-expand
          */
         private final FastArrayList<Move> unexpandedMoves;
 
         /**
-         * Constructor
+         * Konstruktor
          *
          * @param parent
          * @param moveFromParent
@@ -736,20 +842,26 @@ public class MCTSTreeReuse extends AI {
             this.context = context;
             final Game game = context.game();
             scoreSums = new double[game.players().count() + 1];
-
-            // For simplicity, we just take ALL legal moves. 
-            // This means we do not support simultaneous-move games.
+            
+            //Menyimpan semua move yang valid
             unexpandedMoves = new FastArrayList<>(game.moves(context).moves());
 
             if (parent != null) {
+                //jika node ini memiliki parent, tambahkan node ini ke list node anak milik parent 
                 parent.children.add(this);
             }
         }
         
+        /**
+         * Method untuk mengembalikan hasil hash dari state node dengan node parentnya
+         * @return String yang merupakan hasil hashing
+         */
         public String nodeHash() {
             if (parent==null){
+                //jika node ini tidak punya parent, kembalikan string whoCell-nya yang diconcantenate dengan "null"
                 return (context.state().containerStates()[0].cloneWhoCell().toString() + "null");
             } else {
+                //jika node ini punya parent, kembalikan hasil concatenation antara whoCell-nya dengan who-cell parentnya
                 return (context.state().containerStates()[0].cloneWhoCell().toString() + parent.context.state().containerStates()[0].cloneWhoCell().toString());
             }
         }
@@ -763,21 +875,23 @@ public class MCTSTreeReuse extends AI {
 //                return false;
 //            }
 //        }
-
-        
     }
 
     //-------------------------------------------------------------------------
     
-    
+    /**
+     * method utility untuk membantu mencetak gambar papan permainan ke layar
+     * @param context Konteks (state)) game yang ingin dicetak
+     */
     private static void printBoard(Context context){
-        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
-        int states[][] = new int[8][8];
-        for (int i = 0; i < 64; i++) {
+        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan
+        int states[][] = new int[8][8]; //array 2 dimensi untuk menyimpan gambar papan
+        for (int i = 0; i < 64; i++) { //untuk setiap cell pada papan
             int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
             int x = i%8, y = i/8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
-            states[y][x] = color;
+            states[y][x] = color; // menyimpan id pemain pada array 2D
         }
+        //Mencetak papan ke layar
         for (int i = 7; i>=0; i--){
             for (int j = 0; j < 8; j++) {
                 System.out.print(states[i][j] + " ");
