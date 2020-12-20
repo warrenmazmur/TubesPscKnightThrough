@@ -39,12 +39,9 @@ public class MCTSTreeReuse extends AI {
      * flag untuk debugger
      */
     public boolean debug = false;
+
     /**
-     * HashMap untuk menyimpan node yang sudah pernah diexpand
-     */
-    protected static Map<String, Node> visited;
-    /**
-     * pending
+     * Node yang menyimpan state yang dituju saat memilih move sekaligus state yang merupakan parent dari state root berikutnya
      */
     protected static Node sentinel = null;
     
@@ -89,9 +86,8 @@ public class MCTSTreeReuse extends AI {
      * Konstruktor
      */
     public MCTSTreeReuse() {
-        visited = new HashMap<>(); //menggunakan hashmap supaya kompleksitasnya O(1)
-        Node sentinel = null; //pending
-        this.friendlyName = "Ujang x Udin v.8z"; //nama yang dapat ditampilkan pada GUI Ludii
+        Node sentinel = null; // node root yang pertama pasti tidak memiliki parent state
+        this.friendlyName = "Bobon v.1c"; //nama yang dapat ditampilkan pada GUI Ludii
         eksplorasi = Math.sqrt(2);
     }
 
@@ -116,15 +112,18 @@ public class MCTSTreeReuse extends AI {
         Node root = new Node(sentinel, null, context);
         String rHash = root.nodeHash(); //menghitung nilai hash dari node root
         
-        System.out.println("Visited size: " + visited.size());
-        //Mereuse node jika node root pernah diexpand
-        if (visited.containsKey(rHash)){
-            root = visited.get(rHash);
-            System.out.println("Gotten");
-        } else {
-            System.out.println("missed");
-//            visited.put(rHash, root);
-        }        
+        boolean hit = false;
+        if (sentinel != null){
+            int jumlahAnak = sentinel.children.size();
+            for (int i = 0; i < jumlahAnak; ++i) {
+                Node child = sentinel.children.get(i);
+                if(child.equals(root)){
+                    hit = true;
+                    root = child;
+                    break;
+                }
+            }
+        }
 
         // Menghitung batas waktu untuk berhenti melakukan simulasi
         final long stopTime = (maxSeconds > 0.0) ? System.currentTimeMillis() + (long) (maxSeconds * 1000L) : Long.MAX_VALUE;
@@ -301,7 +300,7 @@ public class MCTSTreeReuse extends AI {
             finalMove = finalMoveSelection(root, player);
         }
         
-        //pending
+        //mencatat node parent dari root pada giliran berikutnya
         game.apply(context, finalMove);
         sentinel = new Node(root, finalMove, context);
         
@@ -686,8 +685,7 @@ public class MCTSTreeReuse extends AI {
 
             // menginstansiasi node baru dan menghubungkannya ke game tree
             Node newNode = new Node(current, move, context);
-            // memasukan node baru ke dalam hashmap
-//            visited.put(newNode.nodeHash(), newNode);
+
             //mengembalikan Node yang baru diinstansiasi
             return newNode;
         }
@@ -866,15 +864,15 @@ public class MCTSTreeReuse extends AI {
             }
         }
 
-//        @Override
-//        public boolean equals(Object obj) {
-//            if (obj instanceof Node){
-//                Node nObj = (Node) obj;
-//                return this.parent == nObj.parent && context.state().containerStates()[0].cloneWhatCell().toString().equals((nObj).context.state().containerStates()[0].cloneWhatCell().toString());
-//            } else {
-//                return false;
-//            }
-//        }
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof Node){
+                Node nObj = (Node) obj;
+                return context.state().containerStates()[0].cloneWhatCell().toString().equals((nObj).context.state().containerStates()[0].cloneWhatCell().toString());
+            } else {
+                return false;
+            }
+        }
     }
 
     //-------------------------------------------------------------------------
