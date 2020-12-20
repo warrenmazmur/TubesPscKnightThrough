@@ -1,22 +1,13 @@
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import game.Game;
-import game.types.state.GameType;
-import java.util.HashSet;
-import java.util.Set;
-import main.FileHandling;
-import main.collections.ChunkSet;
-import main.collections.FastArrayList;
 import util.AI;
 import util.Context;
 import util.GameLoader;
 import util.Move;
 import util.Trial;
-import util.model.Model;
-import util.state.containerState.ContainerState;
 
 /**
  * A simple tutorial that demonstrates a variety of useful methods provided by
@@ -30,67 +21,53 @@ public class Tester {
 
         // Load Knightthrough game
         Game game = GameLoader.loadGameFromName("board/race/reach/Knightthrough.lud");
-
+        
+        // Siapkan 10 agen dengan parameter eksplorasi berbeda-beda
         ArrayList<Double> param = new ArrayList<>();
         for (double p = 1; p <= 3; p += 0.2) {
             param.add(p);
         }
+       
         
-//        param.clear();
-//        param.add(3.0);
-//        param.add(3.0);
-        
-        int winCount[] = new int[param.size()];
-        System.out.println("size: " + winCount.length);
+        int winCount[] = new int[param.size()]; // array yang menyimpan total kemenangan setiap agen
         boolean versus[][] = new boolean[param.size()][param.size()]; //baris i kolom j true jika agen i mengalahkan agen j
-
+        
+        // round robin tournament
         for (int i = 0; i < param.size() - 1; i++) {
             for (int j = i + 1; j < param.size(); j++) {
-                System.gc();
-                // to be able to play the game, we need to instantiate "Trial" and "Context" objects
+                System.gc(); // panggil garbage collector untuk menghindari memory leak
+                
+                // instansiasi object Trial dan Context
                 Trial trial = new Trial(game);
                 Context context = new Context(game, trial);
                 
                 
-                //---------------------------------------------------------------------
-                // now we're going to have a look at playing a few full games, using AI
-                // first, let's instantiate some agents
+                // instansiasi agen
                 final List<AI> agents = new ArrayList<AI>();
-                agents.add(null);	// insert null at index 0, because player indices start at 1      
-                agents.add(new CustomizedMCTS(Math.sqrt(param.get(i))));
-                agents.add(new CustomizedMCTS(Math.sqrt(param.get(j))));
+                agents.add(null);	// dummy variable, karena nomor player dimulai dari 1
+                agents.add(new CustomizedMCTS(Math.sqrt(param.get(i)))); // player 1 (putih)
+                agents.add(new CustomizedMCTS(Math.sqrt(param.get(j)))); // player 2 (hitam)
 
-                // number of games we'd like to play
+                // banyak game yang ingin dimainkan
                 final int numGames = 1;
 
-                // NOTE: in our following loop through number of games, the different
-                // agents are always assigned the same player number. For example,
-                // Player 1 will always be random, Player 2 always UCT, Player 3
-                // always random, etc.
-                //
-                // For a fair comparison of playing strength, agent assignments to
-                // player numbers should rotate through all possible permutations,
-                // to correct for possible first-mover-advantages or disadvantages, etc.
-                for (int g = 0; g < numGames; ++g) {
-                    // (re)start our game
-                    game.start(context);
+                for (int g = 0; g < numGames; ++g) { // mainkan sejumlah numGames
+                    
+                    game.start(context); // start game
 
-                    // (re)initialise our agents
+                    // inisialisasi agen
                     for (int p = 1; p < agents.size(); ++p) {
                         agents.get(p).initAI(game, p);
                     }
 
-                    // keep going until the game is over
+                    // mainkan terus selama game belum berakhir
                     while (!context.trial().over()) {
-                        // figure out which player is to move
-                        final int mover = context.state().mover();
+                        
+                        final int mover = context.state().mover(); // nomor player yang mendapat giliran saat ini
 
-                        // retrieve mover from list of agents
-                        final AI agent = agents.get(mover);
+                        final AI agent = agents.get(mover); // ambil agen dengan nomor player mover pada list agen
 
-                        // ask agent to select a move
-                        // we'll give them a search time limit of 0.2 seconds per decision
-                        // IMPORTANT: pass a copy of the context, not the context object directly
+                        // penentuan move oleh agen
                         final Move move = agent.selectAction(
                                 game,
                                 new Context(context),
@@ -99,27 +76,21 @@ public class Tester {
                                 -1
                         );
 
-                        // apply the chosen move
+                        // apply move terhadap game
                         game.apply(context, move);
 
-//                printBoard(context);
-//                System.out.println("");
-//                System.out.println("---------------------");
-//                System.out.println("");
                     }
 
-                    // let's see who won
-                    String stat = context.trial().status().toString();
-                    if (stat.equals("Player 1 wins.")) {
-//                        player1WinCount++;
-                        winCount[i]++;
-                        versus[i][j] = true;
-                        versus[j][i] = false;
+                    String stat = context.trial().status().toString(); // String status yang berisi pemenang
+                    if (stat.equals("Player 1 wins.")) { // player ke-i menang
+                        winCount[i]++; // total kemenangan player ke-i bertambah
+                        versus[i][j] = true; // player ke-i mengalahkan player ke-j
+                        versus[j][i] = false; // player ke-j dikalahkan oleh player ke-i
                         System.out.println(i + " wins against " + j);
-                    } else {
-                        winCount[j]++;
-                        versus[i][j] = false;
-                        versus[j][i] = true;
+                    } else {  // player ke-j menang
+                        winCount[j]++; // total kemenangan player ke-j bertambah
+                        versus[i][j] = false; // player ke-i dikalahkan oleh player ke-j
+                        versus[j][i] = true; // player ke-j mengalahkan player ke-i
                         System.out.println(j + " wins against " + i);
                     }
                     
@@ -127,11 +98,13 @@ public class Tester {
             }
         }
         
+        // print total kemenangan oleh setiap agen
         System.out.println("param wincount");
         for (int i = 0; i < winCount.length; i++) {
             System.out.println(param.get(i) + ": " + winCount[i]);
         } System.out.println("");
         
+        // print hasil pertandingan oleh setiap agen dengan setiap agen
         System.out.println("Match result");
         for (int i = 0; i < versus.length; i++) {
             for (int j = 0; j < versus.length; j++) {
@@ -140,21 +113,4 @@ public class Tester {
             System.out.println("");
         }
     }
-
-    private static void printBoard(Context context) {
-        ChunkSet chunksInitial = context.state().containerStates()[0].cloneWhoCell(); // state papan sebelum diapply move
-        int states[][] = new int[8][8];
-        for (int i = 0; i < 64; i++) {
-            int color = chunksInitial.getChunk(i); // nomor player yang menempati posisi i
-            int x = i % 8, y = i / 8; // x : posisi kotak secara horizontal, y : posisi kotak secara vertikal, (0,0) berada di kiri bawah papan
-            states[y][x] = color;
-        }
-        for (int i = 7; i >= 0; i--) {
-            for (int j = 0; j < 8; j++) {
-                System.out.print(states[i][j] + " ");
-            }
-            System.out.println("");
-        }
-    }
-
 }
