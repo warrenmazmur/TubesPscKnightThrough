@@ -84,12 +84,21 @@ public class CustomizedMCTS extends AI {
     
     /**
      * Konstruktor
+     * @param eksplorasi parameter eksplorasi untuk UCB1
      */
     public CustomizedMCTS(double eksplorasi) {
         Node sentinel = null; // node root yang pertama pasti tidak memiliki parent state
         this.friendlyName = "Bobon v.1c"; //nama yang dapat ditampilkan pada GUI Ludii
 //        eksplorasi = Math.sqrt(2);
         this.eksplorasi = eksplorasi;
+    }
+    
+    /**
+     * Kontruktor kosong yang dapat dipanggil oleh engine Ludii
+     * Parameter eksplorasi diset menjadi akar 2
+     */
+    public CustomizedMCTS() {
+        this(Math.sqrt(2));
     }
 
     /**
@@ -303,7 +312,7 @@ public class CustomizedMCTS extends AI {
         
         //mencatat node parent dari root pada giliran berikutnya
         game.apply(context, finalMove);
-        sentinel = new Node(root, finalMove, context);
+        sentinel = new Node(null, finalMove, context);
         
         return finalMove;
     }
