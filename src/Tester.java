@@ -41,12 +41,13 @@ public class Tester {
         // first, let's instantiate some agents
         final List<AI> agents = new ArrayList<AI>();
         agents.add(null);	// insert null at index 0, because player indices start at 1
-        agents.add(new MCTSTreeReuse());
-        agents.add(new MCTSTreeReuse());
+        agents.add(new CustomizedMCTS(Math.sqrt(0.1)));
+        agents.add(new CustomizedMCTS(Math.sqrt(10)));
         
 
         // number of games we'd like to play
-        final int numGames = 1;
+        final int numGames = 20;
+        int player1WinCount = 0;
 
         // NOTE: in our following loop through number of games, the different
         // agents are always assigned the same player number. For example,
@@ -79,7 +80,7 @@ public class Tester {
                 final Move move = agent.selectAction(
                         game,
                         new Context(context),
-                        0.2,
+                        0.5,
                         -1,
                         -1
                 );
@@ -94,11 +95,15 @@ public class Tester {
             }
             
             // let's see who won
-            System.out.println(context.trial().status());
+            String stat = context.trial().status().toString();
+            if(stat.equals("Player 1 wins.")) player1WinCount ++;
+            System.out.println(stat);
             for (final ContainerState containerState : context.state().containerStates()) {
                 System.out.println("last state = " + containerState.cloneWhoCell().toChunkString());
             }
         }
+        
+        System.out.println("Player 1 win count : " + player1WinCount);
     }
     
     private static void printBoard(Context context){

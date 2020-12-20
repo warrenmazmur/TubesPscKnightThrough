@@ -48,7 +48,7 @@ public class CustomizedMCTS extends AI {
     /**
      * parameter eksplorasi untuk selection policy dengan UCB1
      */
-    public static double eksplorasi;
+    public double eksplorasi;
     
     /**
      * class untuk membungkus objek Move dengan nilai heuristiknya.
@@ -85,10 +85,11 @@ public class CustomizedMCTS extends AI {
     /**
      * Konstruktor
      */
-    public CustomizedMCTS() {
+    public CustomizedMCTS(double eksplorasi) {
         Node sentinel = null; // node root yang pertama pasti tidak memiliki parent state
         this.friendlyName = "Bobon v.1c"; //nama yang dapat ditampilkan pada GUI Ludii
-        eksplorasi = Math.sqrt(2);
+//        eksplorasi = Math.sqrt(2);
+        this.eksplorasi = eksplorasi;
     }
 
     /**
@@ -150,7 +151,7 @@ public class CustomizedMCTS extends AI {
                 }
 
                 //memilih node berikutnya berdasarkan selection policy
-                current = select(current);
+                current = select(current, eksplorasi);
 
                 if (current.visitCount == 0) {
                     // Kita sudah menemukan node baru, perlu dilakukan play-out
@@ -670,7 +671,7 @@ public class CustomizedMCTS extends AI {
      * @param current Node saat ini
      * @return Node yang terpilih. Bila nilai visitnya == 0, artinya node tersebut baru saja diinstansiasi
      */
-    public static Node select(final Node current) {
+    public static Node select(final Node current, double eksplorasi) {
         //jika node saat ini belum sepenuhnya diekspansi
         if (!current.unexpandedMoves.isEmpty()) {
             //memilih salah satu Move secara acak
